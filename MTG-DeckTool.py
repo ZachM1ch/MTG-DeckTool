@@ -1,7 +1,7 @@
 ##---------------------##
 ## Zachary Michniewicz ##
-##    DeckTool V0.8    ##
-##    11 April 2023    ##
+##    DeckTool V1.0    ##
+##    21 April 2023    ##
 ##---------------------##
 
 # imports
@@ -12,15 +12,14 @@ import PIL.ImageTk
 from io import BytesIO
 from tkinter import *
 import webbrowser
-import smtplib
-from email.mime.text import MIMEText
 
 # create root window
 root = Tk()
  
 # setup window
 root.title("Magic: The Gathering DeckTool")
-root.geometry('1390x980')
+root.geometry('1430x980')
+root['bg'] = '#19232D'
 
 # global variable for result of api call
 call_result = {}
@@ -68,7 +67,7 @@ def added(index):
                     decklist.remove(i)
                     break;
         if same == False:
-            decklist.append({'qty': int(add_var[index].get()), 'name': call_result['data'][index]['name'], 'set': call_result['data'][index]['set']})
+            decklist.append({'qty': int(add_var[index].get()), 'name': call_result['data'][index]['name'], 'set': call_result['data'][index]['set'], 'price': call_result['data'][index]['prices']['usd']})
     
             # format set code
             cap_set = '['
@@ -93,18 +92,27 @@ def viewed():
     # reset lists
     resetLists(labels, images, entries, buttons)
     
-    
     data = "Decklist\n-----------------------------------------"
-    
     
     for i in range(len(decklist)):
         info = "\n" + str(decklist[i]['qty']) + " " + decklist[i]['name'] + " " + decklist[i]['set']
         data += info
     
-    title_label.configure(height = len(decklist)+2)
+    title_label.configure(height = len(decklist)+2, bg = '#505F69', fg = 'white')
     title_label.insert(1.0, data)
     title_label.grid(column = 1, row = 1, padx = 15)
-    #title_label.configure(state="disabled")
+    
+    # estimated price output
+    cost = 0.0
+    for i in decklist:
+        cost += (int(i['qty']) * (float(i['price'])*100))
+    cost = cost / 100
+        
+    est = "Estimated Price: $%.2f" % cost
+    
+    price_label = Label(root, text = est, justify = "left", anchor = "w", bg = '#19232D', fg = 'white')
+    price_label.grid(column=1, row=2)
+    
     
 # function to save decklist
 def saved():
@@ -124,33 +132,6 @@ def saved():
         f.write(str(i['qty']) + " " + i['name'] + " " + i['set'] + "\n")
     f.close()
     
-# function to send list via email
-def sent():
-    # variable for body text
-    body = ""
-    for i in decklist:
-        body += str(i['qty']) + " " + i['name'] + " " + i['set'] + "\n"
-    
-    #save deck automatically
-    saved()
-    
-    #retrieve decklist name
-    dln = txt_list.get()
-    if dln == "":
-        dln = "Decklist"
-    
-    #https://stackoverflow.com/questions/6270782/how-to-send-an-email-with-python
-        
-    #### Get mailgun api in late april
-    
-   #def send_simple_message():
-       #return requests.post(
-       #"https://api.mailgun.net/v3/YOUR_DOMAIN_NAME/messages",
-       #auth=("api", "YOUR_API_KEY"),
-       #data={"from": "MTG DeckTool <mailgun@YOUR_DOMAIN_NAME>",
-       #      "to": [emailname.get(), emailname.get()],
-       #      "subject": dln,
-       #      "text": body})
 
 # function to format search term for api call
 def searchFormat(term):
@@ -192,7 +173,7 @@ def searched():
     # api call
     req = "https://api.scryfall.com/cards/search?q="
     tmp_res = txt.get()
-    reqs = req + searchFormat(tmp_res) + "+-is%3Adoublesided+-st%3Amemorabilia+-st%3Atoken+-set%3Apmoa&order=usd&dir=asc"
+    reqs = req + searchFormat(tmp_res) + "+-is%3Adoublesided+-st%3Amemorabilia+-st%3Atoken+-set%3Apmoa+usd>%3D0.01&order=usd&dir=asc"
     full_req = requests.get(reqs)
     full_list = json.loads(full_req.text)
     
@@ -213,9 +194,9 @@ def searched():
         # create empty labels across window
         row_ct = 1
         for i in range(range_run):
-            labels.append(Label(root, text = "", justify = "left", anchor = "nw", width = 25, wraplength = 150))
-            entries.append(Entry(root, justify = "right", textvariable = add_var[i], width = 10))
-            buttons.append(Button(root, text = "Add to deck", command=lambda index=i: added(index)))
+            labels.append(Label(root, text = "", justify = "left", anchor = "nw", width = 25, wraplength = 150, bg = '#19232D', fg = 'white'))
+            entries.append(Entry(root, justify = "right", textvariable = add_var[i], width = 10, bg = '#6C7073', fg = 'white'))
+            buttons.append(Button(root, text = "Add to deck", command=lambda index=i: added(index), bg = '#32414B', fg = 'white'))
             col = ((int((i)/4)+1)*3)-2
             images.append(Label(root))
             images[i].grid(column =col, row =row_ct, rowspan=5)
@@ -234,7 +215,7 @@ def searched():
             card_list = card_list + "------------------------------\n"
             card_list = card_list + "Name: " + full_list['data'][i]['name'] + "\n"
             card_list = card_list + "Set: " + full_list['data'][i]['set_name'] + "\n"
-            card_list = card_list + "CMC: " + str(int(full_list['data'][i]['cmc'])) + "\n"
+            #card_list = card_list + "CMC: " + str(int(full_list['data'][i]['cmc'])) + "\n"
             card_list = card_list + "Price: $" + str(full_list['data'][i]['prices']['usd']) + "\n"
             
             # get image of card
@@ -251,7 +232,7 @@ def searched():
             legal = full_list['data'][i]['legalities'].items()
             for k, v in legal:
                 if (k == 'standard' or k == 'modern' or k == 'legacy' or k == 'vintage' or k == 'commander'):
-                    card_list = card_list + k + ": " + v + "\n"
+                    card_list = card_list + k.capitalize() + ": " + v.capitalize().replace("_", " ") + "\n"
                     
             card_list = card_list + "------------------------------"
                     
@@ -263,75 +244,63 @@ def searched():
                     
                     
 # left column of buttons
-leftside = Label(root, text = "", justify = "left", anchor = "nw")
+leftside = Label(root, text = "", justify = "left", anchor = "nw", bg = '#19232D', fg = 'white')
 leftside.grid(column=0, row=0)
 
 # view deck button
-view_deck = Button(root, text = "View Deck", command=viewed)
+view_deck = Button(root, text = "View Deck", command=viewed, bg = '#32414B', fg = 'white')
 view_deck.grid(column=0, row=1)
 
 # left column of buttons
-listname = Label(root, text = "List Name:", justify = "left", anchor = "nw")
+listname = Label(root, text = "List Name:", justify = "left", anchor = "nw", bg = '#19232D', fg = 'white')
 listname.grid(column=0, row=2)
 
 # deck name field
-txt_list = Entry(root, width=15)
+txt_list = Entry(root, width=15, bg = '#6C7073', fg = 'white')
 txt_list.grid(column =0, row =3) 
 
 # save deck button
-save_deck = Button(root, text = "Save Deck", command=saved)
+save_deck = Button(root, text = "Save Deck", command=saved, bg = '#32414B', fg = 'white')
 save_deck.grid(column=0, row=4)
 
 # tcgplayer button
-tcg_entry = Button(root, text = "Entry Page", command=tcg)
+tcg_entry = Button(root, text = "Entry Page", command=tcg, bg = '#32414B', fg = 'white')
 tcg_entry.grid(column=0, row=5)
 
-# email
-email_label = Label(root, text = "Your Email:", justify = "left", anchor = "nw")
-email_label.grid(column=0, row=7)
-
-# email entry field
-emailname = Entry(root, width=15)
-emailname.grid(column =0, row =8) 
-
-# send list button
-send_list = Button(root, text = "Send List", command=sent)
-send_list.grid(column=0, row=9)
-
 # radio label
-radio_label = Label(root, text = "Legality:", justify = "left", anchor = "nw")
-radio_label.grid(column=0, row=10)
+radio_label = Label(root, text = "Legality:", justify = "left", anchor = "nw", bg = '#19232D', fg = 'white')
+radio_label.grid(column=0, row=6)
 
 # radio buttons
 radio = StringVar(root, "kitchen")
-R1 = Radiobutton(root, text="Kitchen Table", variable=radio, value="kitchen", command=formatted)
+R1 = Radiobutton(root, text="Kitchen Table", variable=radio, value="kitchen", command=formatted, bg = '#19232D', fg = 'white', selectcolor = '#3E6691', activebackground = '#19232D', activeforeground = 'white')
+R1.grid(column = 0, row = 7, sticky = 'w')
+R1 = Radiobutton(root, text="Standard", variable=radio, value="standard", command=formatted, bg = '#19232D', fg = 'white', selectcolor = '#3E6691', activebackground = '#19232D', activeforeground = 'white')
+R1.grid(column = 0, row = 8, sticky = 'w')
+R1 = Radiobutton(root, text="Modern", variable=radio, value="modern", command=formatted, bg = '#19232D', fg = 'white', selectcolor = '#3E6691', activebackground = '#19232D', activeforeground = 'white')
+R1.grid(column = 0, row = 9, sticky = 'w')
+R1 = Radiobutton(root, text="Legacy", variable=radio, value="legacy", command=formatted, bg = '#19232D', fg = 'white', selectcolor = '#3E6691', activebackground = '#19232D', activeforeground = 'white')
+R1.grid(column = 0, row = 10, sticky = 'w')
+R1 = Radiobutton(root, text="Vintage", variable=radio, value="vintage", command=formatted, bg = '#19232D', fg = 'white', selectcolor = '#3E6691', activebackground = '#19232D', activeforeground = 'white')
 R1.grid(column = 0, row = 11, sticky = 'w')
-R1 = Radiobutton(root, text="Standard", variable=radio, value="standard", command=formatted)
+R1 = Radiobutton(root, text="Commander", variable=radio, value="commander", command=formatted, bg = '#19232D', fg = 'white', selectcolor = '#3E6691', activebackground = '#19232D', activeforeground = 'white')
 R1.grid(column = 0, row = 12, sticky = 'w')
-R1 = Radiobutton(root, text="Modern", variable=radio, value="modern", command=formatted)
-R1.grid(column = 0, row = 13, sticky = 'w')
-R1 = Radiobutton(root, text="Legacy", variable=radio, value="legacy", command=formatted)
-R1.grid(column = 0, row = 14, sticky = 'w')
-R1 = Radiobutton(root, text="Vintage", variable=radio, value="vintage", command=formatted)
-R1.grid(column = 0, row = 15, sticky = 'w')
-R1 = Radiobutton(root, text="Commander", variable=radio, value="commander", command=formatted)
-R1.grid(column = 0, row = 16, sticky = 'w')
 
 
 # labels along the top
-search_term = Label(root, text = "Enter your search", justify = "left", anchor = "nw")
+search_term = Label(root, text = "Enter your search", justify = "left", anchor = "nw", bg = '#19232D', fg = 'white')
 search_term.grid(column=1, row=0)
  
 # search bar field
-txt = Entry(root, width=15)
+txt = Entry(root, width=15, bg = '#6C7073', fg = 'white')
 txt.grid(column =2, row =0) 
 
 # button widget for search bar
-btn = Button(root, text = "Search", command=searched)
+btn = Button(root, text = "Search", command=searched, bg = '#32414B', fg = 'white')
 btn.grid(column=3, row=0, padx=20)
 
 # label for potential errors
-error_label = Label(root, text = "")
+error_label = Label(root, text = "", bg = '#19232D')
 error_label.grid(column = 4, row = 0)
        
  
